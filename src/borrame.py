@@ -1,66 +1,59 @@
+import os
 import pygame
-from pygame.locals import *
-
-from OpenGL.GL import *
-from OpenGL.GLU import *
-
-verticies = (
-    (1, -1, -1),
-    (1, 1, -1),
-    (-1, 1, -1),
-    (-1, -1, -1),
-    (1, -1, 1),
-    (1, 1, 1),
-    (-1, -1, 1),
-    (-1, 1, 1)
-    )
-
-edges = (
-    (0,1),
-    (0,3),
-    (0,4),
-    (2,1),
-    (2,3),
-    (2,7),
-    (6,3),
-    (6,4),
-    (6,7),
-    (5,1),
-    (5,4),
-    (5,7)
-    )
-
-
-def Cube():
-    glBegin(GL_LINES)
-    for edge in edges:
-        for vertex in edge:
-            glVertex3fv(verticies[vertex])
-    glEnd()
-
-
-def main():
-    pygame.init()
-    display = (800,600)
-    pygame.display.init()
+import time
+import random
  
-    pygame.display.set_mode(display, DOUBLEBUF|OPENGL)
-
-    gluPerspective(45, (display[0]/display[1]), 0.1, 50.0)
-
-    glTranslatef(0.0,0.0, -5)
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
-
-        glRotatef(1, 3, 1, 1)
-        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
-        Cube()
-        pygame.display.flip()
-        pygame.time.wait(10)
-
-
-main()
+class pyscope :
+    screen = None;
+    
+    def __init__(self):
+        "Ininitializes a new pygame screen using the framebuffer"
+        # Based on "Python GUI in Linux frame buffer"
+        # http://www.karoltomala.com/blog/?p=679
+        disp_no = os.getenv("DISPLAY")
+        if disp_no:
+            print "I'm running under X display = {0}".format(disp_no)
+        
+        # Check which frame buffer drivers are available
+        # Start with fbcon since directfb hangs with composite output
+        drivers = ['fbcon', 'directfb', 'svgalib']
+        found = False
+        for driver in drivers:
+            # Make sure that SDL_VIDEODRIVER is set
+            if not os.getenv('SDL_VIDEODRIVER'):
+                os.putenv('SDL_VIDEODRIVER', driver)
+            try:
+                pygame.display.init()
+            except pygame.error:
+                print 'Driver: {0} failed.'.format(driver)
+                continue
+            found = True
+            break
+    
+        if not found:
+            raise Exception('No suitable video driver found!')
+        
+        size = (pygame.display.Info().current_w, pygame.display.Info().current_h)
+        print "Framebuffer size: %d x %d" % (size[0], size[1])
+        self.screen = pygame.display.set_mode(size, pygame.FULLSCREEN)
+        # Clear the screen to start
+        self.screen.fill((0, 0, 0))        
+        # Initialise font support
+        pygame.font.init()
+        # Render the screen
+        pygame.display.update()
+ 
+    def __del__(self):
+        "Destructor to make sure pygame shuts down, etc."
+ 
+    def test(self):
+        # Fill the screen with red (255, 0, 0)
+        red = (255, 0, 0)
+        self.screen.fill(red)
+        # Update the display
+        pygame.display.update()
+ 
+# Create an instance of the PyScope class
+scope = pyscope()
+scope.test()
+time.sleep(10)
