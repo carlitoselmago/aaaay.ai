@@ -32,7 +32,7 @@ class aaaay():
             print("No labels where created yet")
         if self.videomode=="pygame":
             pygame.display.init()
-            self.screen = pygame.display.set_mode( ( 720, 576 ),DOUBLEBUF|OPENGL )#PAL
+            self.screen = pygame.display.set_mode( ( 720, 576 ) )#PAL
     
     def capture_images_from_file(self,filename):
         clip = VideoFileClip(self.moviesFolder+filename)
