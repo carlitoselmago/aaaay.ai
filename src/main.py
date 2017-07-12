@@ -33,7 +33,7 @@ class aaaay():
         except:
             print("No labels where created yet")
         if self.videomode=="pygame":
-            self.initPygameScreen(0)
+            self.initPygameScreen(1)
             
         
     
@@ -97,7 +97,7 @@ class aaaay():
             
             print("DOWNLOADING VIDEO, please wait")
             youtubeDLCommand='youtube-dl -f "best[width<=1080,height<=720]" --output "movies/'+id+'.mp4" -k '+url
-            youtubeDLCommand2='youtube-dl -f webm '+url
+            youtubeDLCommand2='youtube-dl -f webm --output "movies/'+id+'.webm" '+url
             self.runCommand(youtubeDLCommand)
             print("DOWNLOADING AUDIO, please wait")
             self.runCommand(youtubeDLCommand2)
