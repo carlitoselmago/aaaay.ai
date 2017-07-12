@@ -9,6 +9,7 @@ from pydub import AudioSegment
 from pydub.playback import play
 import ntpath
 from time import sleep
+import pygame
 
 class aaaay():
     
@@ -19,14 +20,19 @@ class aaaay():
     capturesFolder="captures/"
     windowName="aaaay.ai"
     processing=False
+    videomode="pygame" #others: gtk
     
     def __init__(self):
         
         print ("init aaaay class")
+        
         try:
             self.labels=self.get_labels()
         except:
             print("No labels where created yet")
+        if self.videomode=="pygame":
+            pygame.display.init()
+            self.screen = pygame.display.set_mode( ( 720, 576 ) )#PAL
     
     def capture_images_from_file(self,filename):
         clip = VideoFileClip(self.moviesFolder+filename)
@@ -135,62 +141,79 @@ class aaaay():
 
         with tf.Session() as sess:
             softmax_tensor = sess.graph.get_tensor_by_name('final_result:0')
-            
-            cv2.namedWindow(self.windowName, cv2.WND_PROP_FULLSCREEN)
-            cv2.setWindowProperty(self.windowName,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)       
+            if self.videomode=="gtk":
+                cv2.namedWindow(self.windowName, cv2.WND_PROP_FULLSCREEN)
+                cv2.setWindowProperty(self.windowName,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)       
            
-            while(cap.isOpened()):  # note that we don't have to use frame number here, we could read from a live written file.
-
-                
-                ret, frame = cap.read()
-                
-                #print (ret,frame)
+            running=True
+            while running:  # note that we don't have to use frame number here, we could read from a live written file.
                 start_time = time.time()
-                
+                ret, frame = cap.read()
+                #print (ret,frame)
                 #ACTION
                   
                 #print (frame)
                 #sys.exit()
                 # Get the numpy version of the image.
-                decoded_image = frame#image.array
+                
                 
                 
                 if not self.processing:
-                    t = threading.Thread(target=self.analysiseFrame, args = (sess,softmax_tensor,decoded_image))
+                    t = threading.Thread(target=self.analysiseFrame, args = (sess,softmax_tensor,frame))
                     #t.daemon = True
                     t.start()
                     pass
                    
                
                 #END ACTION 
-
-
-                totalTime=(time.time() - start_time)
-                
-                #print totalTime
-
-                currentTimeFrame=cap.get(1)+(totalTime*fps)
-
                 #cap.set(1,currentTimeFrame) #frames to skip
 
-
-
-                cv2.imshow(self.windowName, frame)
-
+                if self.videomode=="pygame":
+                    
+                    frame=self.cvimage_to_pygame(frame)
+                    self.screen.blit(frame,(0,0))
+                    #self.screen.fill(frame)
+                    pygame.display.update()
+                    
+                if self.videomode=="gtk":
+                    cv2.imshow(self.windowName, frame)
+                
                 #cv2.setTrackbarPos("time", self.windowName, int(currentTimeFrame)) 
 
 
                 #cv2.waitKey(int(fps*1000)) # time to wait between frames, in mSec
                 #ret, frame = cap.read() # read next frame, get next return code
+                if self.videomode=="gtk":
+                    key = cv2.waitKey(50)
+                    if  key == 32:
+                        running = False
+                        break  # esc to quit
+                        
+                if self.videomode=="pygame":
+                    
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            running = False  # Be interpreter friendly
+                
+                    totalTime=(time.time() - start_time)
+                    #print (totalTime)
+                    #totalTime=0.1
+                    currentTimeFrame=cap.get(1)+(totalTime*fps)
+                    cap.set(1,currentTimeFrame) #frames to skip
 
-                key = cv2.waitKey(50)
-                if  key == 32: 
-                    break  # esc to quit
                 
 
-
-            cv2.destroyAllWindows()
+            if self.videomode=="gtk":
+                cv2.destroyAllWindows()
+            if self.videomode=="pygame":
+                pygame.quit()
             
+           
+    def cvimage_to_pygame(self,image):
+        """Convert cvimage into a pygame image"""
+        return pygame.image.frombuffer(image.tostring(), image.shape[1::-1],
+                                       "RGB")
+                                       
     def analysiseFrame(self,sess,softmax_tensor,decoded_image):
         self.processing=True
         # Make the prediction. Big thanks to this SO answer:
