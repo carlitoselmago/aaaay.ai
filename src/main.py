@@ -1,4 +1,4 @@
-from moviepy.editor import *
+
 import time
 import tensorflow as tf
 import cv2
@@ -10,6 +10,8 @@ from pydub.playback import play
 import ntpath
 from time import sleep
 import pygame
+import os
+import os.path
 
 class aaaay():
     
@@ -31,10 +33,13 @@ class aaaay():
         except:
             print("No labels where created yet")
         if self.videomode=="pygame":
-            pygame.display.init()
-            self.screen = pygame.display.set_mode( ( 720, 576 ) )#PAL
+            self.initPygameScreen()
+            #pygame.display.init()
+            #self.screen = pygame.display.set_mode( ( 720, 576 ) )#PAL
+        
     
     def capture_images_from_file(self,filename):
+        from moviepy.editor import *
         clip = VideoFileClip(self.moviesFolder+filename)
         clip=clip.set_fps(self.framerate)
         clip.resize( (self.captureRes) )
@@ -69,6 +74,41 @@ class aaaay():
         with open('train/retrained_labels.txt', 'r') as fin:
             labels = [line.rstrip('\n') for line in fin]
             return labels
+        
+    def runCommand(self,some_command):
+        import subprocess
+
+        #This command could have multiple commands separated by a new line \n
+        #some_command = "export PATH=$PATH://server.sample.mo/app/bin \n customupload abc.txt"
+
+        p = subprocess.Popen(some_command, stdout=subprocess.PIPE, shell=True)
+
+        (output, err) = p.communicate()  
+
+        #This makes the wait possible
+        p_status = p.wait()
+
+        #This will give you the output of the command being executed
+        print "Command output: " + output
+
+    def downloadAndWatch(self,url):
+        
+        id=url.split("?v=")[1]
+        if not os.path.isfile("movies/"+id+"_PAL.mp4"):
+            
+            print("DOWNLOADING VIDEO, please wait")
+            youtubeDLCommand='youtube-dl -f "best[width<=1080,height<=720]" --output "movies/'+id+'.mp4" -k '+url
+            youtubeDLCommand2='youtube-dl -f webm '+url
+            self.runCommand(youtubeDLCommand)
+            print("DOWNLOADING AUDIO, please wait")
+            self.runCommand(youtubeDLCommand2)
+            ffmpegCommand="ffmpeg -i movies/"+id+".mp4 -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 128k -movflags +faststart -vf scale=-2:576,format=yuv420p movies/"+id+"_PAL.mp4"
+            print ffmpegCommand
+            print("CONVERTING VIDEO, please wait")
+            self.runCommand(ffmpegCommand)
+        
+        self.run_classification("movies/"+id+"_PAL.mp4")
+    
 
     def predict_on_image(self,image):
 
@@ -133,11 +173,11 @@ class aaaay():
             _ = tf.import_graph_def(graph_def, name='')
             
         #play audio
-        tA = threading.Thread(target=self.playAudio, args = (videofilename,"webm",1))
-        tA.start()
+        #tA = threading.Thread(target=self.playAudio, args = (videofilename,"webm",1))
+        #tA.start()
         
         #self.playAudio(videofilename)
-        
+        FPS = fps
 
         with tf.Session() as sess:
             softmax_tensor = sess.graph.get_tensor_by_name('final_result:0')
@@ -171,9 +211,11 @@ class aaaay():
                 if self.videomode=="pygame":
                     
                     frame=self.cvimage_to_pygame(frame)
+                    frame = pygame.transform.scale(frame, self.screenSize)
                     self.screen.blit(frame,(0,0))
                     #self.screen.fill(frame)
                     pygame.display.update()
+                    self.clock.tick(FPS)
                     
                 if self.videomode=="gtk":
                     cv2.imshow(self.windowName, frame)
@@ -194,12 +236,21 @@ class aaaay():
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
                             running = False  # Be interpreter friendly
-                
+                        elif event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_ESCAPE:
+                                running = False
+                                
+                        if (event.type is pygame.KEYDOWN and event.key == pygame.K_f):
+                            if self.screen.get_flags() & pygame.FULLSCREEN:
+                                pygame.display.set_mode(self.screenSize)
+                            else:
+                                pygame.display.set_mode(self.screenSize, pygame.FULLSCREEN)
+
                     totalTime=(time.time() - start_time)
                     #print (totalTime)
                     #totalTime=0.1
                     currentTimeFrame=cap.get(1)+(totalTime*fps)
-                    cap.set(1,currentTimeFrame) #frames to skip
+                    #cap.set(1,currentTimeFrame) #frames to skip
 
                 
 
@@ -240,6 +291,44 @@ class aaaay():
         song = AudioSegment.from_file(filename+"."+format,format)
         play(song)
             
+    def initPygameScreen(self):
+        "Ininitializes a new pygame screen using the framebuffer"
+        # Based on "Python GUI in Linux frame buffer"
+        # http://www.karoltomala.com/blog/?p=679
+        disp_no = os.getenv("DISPLAY")
+        if disp_no:
+            print "I'm running under X display = {0}".format(disp_no)
+        
+        # Check which frame buffer drivers are available
+        # Start with fbcon since directfb hangs with composite output
+        drivers = ['fbcon', 'directfb', 'svgalib']
+        found = False
+        for driver in drivers:
+            # Make sure that SDL_VIDEODRIVER is set
+            if not os.getenv('SDL_VIDEODRIVER'):
+                os.putenv('SDL_VIDEODRIVER', driver)
+            try:
+                pygame.display.init()
+                self.clock = pygame.time.Clock()
+            except pygame.error:
+                print 'Driver: {0} failed.'.format(driver)
+                continue
+            found = True
+            break
+    
+        if not found:
+            raise Exception('No suitable video driver found!')
+        
+        size = (pygame.display.Info().current_w, pygame.display.Info().current_h)
+        self.screenSize=size
+        print "Framebuffer size: %d x %d" % (size[0], size[1])
+        self.screen = pygame.display.set_mode(size, pygame.FULLSCREEN)
+        # Clear the screen to start
+        #self.screen.fill((0, 0, 0))        
+        # Initialise font support
+        #pygame.font.init()
+        # Render the screen
+        pygame.display.update()
             
             
           
@@ -249,5 +338,6 @@ ay=aaaay()
 #ay.capture_images_from_file("pouritup.mp4")
 #ay.capture_images_from_file("vandamme.mp4")
 #print (ay.predict_on_image("captures/pouritup_18.jpg"))
-ay.run_classification("movies/pouritup_small.mp4")#"movies/anaconda.mp4")
+#ay.run_classification("movies/pouritup_small.mp4")#"movies/anaconda.mp4")
+ay.downloadAndWatch("https://www.youtube.com/watch?v=ehcVomMexkY")
 print("FINISHED")
