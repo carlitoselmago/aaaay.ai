@@ -33,9 +33,8 @@ class aaaay():
         except:
             print("No labels where created yet")
         if self.videomode=="pygame":
-            self.initPygameScreen()
-            #pygame.display.init()
-            #self.screen = pygame.display.set_mode( ( 720, 576 ) )#PAL
+            self.initPygameScreen(0)
+            
         
     
     def capture_images_from_file(self,filename):
@@ -291,44 +290,51 @@ class aaaay():
         song = AudioSegment.from_file(filename+"."+format,format)
         play(song)
             
-    def initPygameScreen(self):
-        "Ininitializes a new pygame screen using the framebuffer"
-        # Based on "Python GUI in Linux frame buffer"
-        # http://www.karoltomala.com/blog/?p=679
-        disp_no = os.getenv("DISPLAY")
-        if disp_no:
-            print "I'm running under X display = {0}".format(disp_no)
-        
-        # Check which frame buffer drivers are available
-        # Start with fbcon since directfb hangs with composite output
-        drivers = ['fbcon', 'directfb', 'svgalib']
-        found = False
-        for driver in drivers:
-            # Make sure that SDL_VIDEODRIVER is set
-            if not os.getenv('SDL_VIDEODRIVER'):
-                os.putenv('SDL_VIDEODRIVER', driver)
-            try:
-                pygame.display.init()
-                self.clock = pygame.time.Clock()
-            except pygame.error:
-                print 'Driver: {0} failed.'.format(driver)
-                continue
-            found = True
-            break
-    
-        if not found:
-            raise Exception('No suitable video driver found!')
-        
-        size = (pygame.display.Info().current_w, pygame.display.Info().current_h)
-        self.screenSize=size
-        print "Framebuffer size: %d x %d" % (size[0], size[1])
-        self.screen = pygame.display.set_mode(size, pygame.FULLSCREEN)
-        # Clear the screen to start
-        #self.screen.fill((0, 0, 0))        
-        # Initialise font support
-        #pygame.font.init()
-        # Render the screen
-        pygame.display.update()
+    def initPygameScreen(self,mode=0):
+        if mode==1:
+            pygame.display.init()
+            self.clock = pygame.time.Clock()
+            self.screenSize= (720, 576)
+            self.screen = pygame.display.set_mode( ( self.screenSize ) )#PAL
+        else:
+            "Ininitializes a new pygame screen using the framebuffer"
+            # Based on "Python GUI in Linux frame buffer"
+            # http://www.karoltomala.com/blog/?p=679
+            disp_no = os.getenv("DISPLAY")
+            if disp_no:
+                print "I'm running under X display = {0}".format(disp_no)
+
+            # Check which frame buffer drivers are available
+            # Start with fbcon since directfb hangs with composite output
+            drivers = ['fbcon', 'directfb', 'svgalib']
+            found = False
+            for driver in drivers:
+                # Make sure that SDL_VIDEODRIVER is set
+                if not os.getenv('cd '):
+                    os.putenv('SDL_VIDEODRIVER', driver)
+                try:
+                    pygame.display.init()
+                    self.clock = pygame.time.Clock()
+                except pygame.error:
+                    print 'Driver: {0} failed.'.format(driver)
+                    continue
+                found = True
+                break
+
+            if not found:
+                raise Exception('No suitable video driver found!')
+
+            size = (pygame.display.Info().current_w, pygame.display.Info().current_h)
+            self.screenSize=size
+            print "Framebuffer size: %d x %d" % (size[0], size[1])
+            self.screen = pygame.display.set_mode(size, pygame.FULLSCREEN)
+            # Clear the screen to start
+            #self.screen.fill((0, 0, 0))        
+            # Initialise font support
+            #pygame.font.init()
+            # Render the screen
+            pygame.display.update()
+        pygame.mouse.set_visible(0)
             
             
           
