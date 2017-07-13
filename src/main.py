@@ -12,6 +12,7 @@ from time import sleep
 import pygame
 import os
 import os.path
+from screeninfo import get_monitors
 
 class aaaay():
     
@@ -22,14 +23,27 @@ class aaaay():
     capturesFolder="captures/"
     windowName="aaaay.ai"
     processing=False
-    videomode="pygame" #others: gtk
+    videomode="pygame" #options: gtk,pygame
+    graphs=[] 
+    colors=[[0,255,255],[255,255,0],[255,0,255],[125,125,0]]
+    
     
     def __init__(self):
         
         print ("init aaaay class")
         
         try:
-            self.labels=self.get_labels()
+            self.screenSize=get_monitors()[0]
+        except:
+            print("could not determine screenSize")
+        self.labels=self.get_labels()
+        self.labelsData={}
+        for i,label in enumerate(self.labels):
+            self.labelsData[label]=0
+            self.graphs.append([0.00])
+        try:
+            pass
+            
         except:
             print("No labels where created yet")
         if self.videomode=="pygame":
@@ -96,11 +110,11 @@ class aaaay():
         if not os.path.isfile("movies/"+id+"_PAL.mp4"):
             
             print("DOWNLOADING VIDEO, please wait")
-            youtubeDLCommand='youtube-dl -f "best[width<=1080,height<=720]" --output "movies/'+id+'.mp4" -k '+url
-            youtubeDLCommand2='youtube-dl -f webm --output "movies/'+id+'.webm" '+url
+            youtubeDLCommand='youtube-dl -f "best[width<=1080,height<=720]" --output "movies/'+id+'.mp4" -k --extract-audio --audio-format mp3 '+url
+            #youtubeDLCommand2='youtube-dl -f webm --output "movies/'+id+'.webm" '+url
             self.runCommand(youtubeDLCommand)
             print("DOWNLOADING AUDIO, please wait")
-            self.runCommand(youtubeDLCommand2)
+            #self.runCommand(youtubeDLCommand2)
             ffmpegCommand="ffmpeg -i movies/"+id+".mp4 -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 128k -movflags +faststart -vf scale=-2:576,format=yuv420p movies/"+id+"_PAL.mp4"
             print ffmpegCommand
             print("CONVERTING VIDEO, please wait")
@@ -172,8 +186,9 @@ class aaaay():
             _ = tf.import_graph_def(graph_def, name='')
             
         #play audio
-        #tA = threading.Thread(target=self.playAudio, args = (videofilename,"webm",1))
-        #tA.start()
+        audioFilename=videofilename.split(".")[0]+".mp3"
+        tA = threading.Thread(target=self.playAudio, args = (audioFilename,"mp3",1))
+        tA.start()
         
         #self.playAudio(videofilename)
         FPS = fps
@@ -206,7 +221,40 @@ class aaaay():
                
                 #END ACTION 
                 #cap.set(1,currentTimeFrame) #frames to skip
+                
+                #paint frame
+                
+                #for i,label in enumerate(self.labelsData):
+                    
+                #graphs
+                w=self.screenSize.width
+                h=(self.screenSize.height)-300
+                l=5
+                step=l
+                stepCount=0
+                print (self.graphs)
+                print ("LELELELE")
+                lastPoint=(w/2,int(0*float(h)))
+                for c,label in enumerate(self.graphs):
+                    if self.labels[c] !="normal":
+                        for d,value in enumerate(reversed(label)):
 
+                            """
+                            cv2.line(frame,
+                             ((w/2)-stepCount,int(value*float(h))),
+                            (((w/2)-stepCount)+l,int(value*float(h)))
+                            ,self.colors[c],1)
+                            """
+                            currentPoint=(w/2)-stepCount,h-(int(value*float(h))+30)
+                            if d!=0 and d<len(label)-1:
+                                cv2.line(frame,(currentPoint),(lastPoint),self.colors[c],1)
+
+                            lastPoint=currentPoint
+
+                            stepCount+=step
+                        stepCount=0
+                        #cv2.putText(frame,label+":"+str(round(self.labelsData[label],2))+"%", (90,(i*50)+30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255))
+                        cv2.putText(frame,self.labels[c], ((w/2)+20,h-int(self.graphs[c][-1]*float(h))-27), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colors[c])
                 if self.videomode=="pygame":
                     
                     frame=self.cvimage_to_pygame(frame)
@@ -269,6 +317,10 @@ class aaaay():
         # Make the prediction. Big thanks to this SO answer:
         # http://stackoverflow.com/questions/34484148/feeding-image-data-in-tensorflow-for-transfer-learning
         predictions = sess.run(softmax_tensor, {'DecodeJpeg:0': decoded_image})
+        self.labelsData=dict(zip(self.labels, predictions[0]))
+        for i,pred in enumerate(predictions[0]):
+            print ("pred",pred)
+            self.graphs[i].append(pred)
         prediction = predictions[0]
 
         # Get the highest confidence category.
@@ -286,8 +338,8 @@ class aaaay():
         
     def playAudio(self,filename,format="webm",delay=0):
         sleep(delay)
-        filename=filename.split(".")[0]
-        song = AudioSegment.from_file(filename+"."+format,format)
+        #filename=filename.split(".")[0]
+        song = AudioSegment.from_file(filename,format)
         play(song)
             
     def initPygameScreen(self,mode=0):
@@ -345,5 +397,5 @@ ay=aaaay()
 #ay.capture_images_from_file("vandamme.mp4")
 #print (ay.predict_on_image("captures/pouritup_18.jpg"))
 #ay.run_classification("movies/pouritup_small.mp4")#"movies/anaconda.mp4")
-ay.downloadAndWatch("https://www.youtube.com/watch?v=ehcVomMexkY")
+ay.downloadAndWatch("https://www.youtube.com/watch?v=dHULK1M-P08")
 print("FINISHED")
