@@ -5,14 +5,22 @@ import cv2
 import numpy as np
 import sys
 import threading
+import pydub
 from pydub import AudioSegment
 from pydub.playback import play
+pydub.AudioSegment.ffmpeg = "C:/ffmpeg/bin/"
 import ntpath
 from time import sleep
 import pygame
 import os
 import os.path
 from screeninfo import get_monitors
+import random
+
+import glob
+
+
+pygame.mixer.init()
 
 class aaaay():
     
@@ -23,13 +31,18 @@ class aaaay():
     capturesFolder="captures/"
     windowName="aaaay.ai"
     processing=False
-    videomode="pygame" #options: gtk,pygame
+    videomode="gtk" #options: gtk,pygame
     graphs=[] 
     colors=[[0,255,255],[255,255,0],[255,0,255],[125,125,0]]
-    
+    soundBoard="chiquito"
+    soundsLoaded={}
+
     
     def __init__(self):
+
         
+
+        self.prepareAudios()
         print ("init aaaay class")
         
         try:
@@ -48,11 +61,44 @@ class aaaay():
             print("No labels where created yet")
         if self.videomode=="pygame":
             self.initPygameScreen(1)
-            
         
+            
+       
+    def prepareAudios(self):
+        #pygame.init()
+        """
+        sound=pygame.mixer.Sound("sounds/chiquito/violent/chiquito-fuego.wav")
+        sound.play()
+        sleep(2)
+        """
+        
+        for path, subdirs, files in os.walk('sounds'+os.sep+self.soundBoard):
+            for dirs in subdirs:
+                #print (dirs)
+                self.soundsLoaded[dirs]=[]
+            for name in files:
+                label= path.split("\\")[-1]
+                #self.soundsLoaded[label].append(AudioSegment.from_ogg(os.path.abspath(os.path.join(path, name)).replace("\\","/")))
+                #sound=pygame.mixer.Sound(os.path.abspath(os.path.join(path, name)).replace("\\","/"))
+                self.soundsLoaded[label].append(pygame.mixer.Sound(os.path.abspath(os.path.join(path, name)).replace("\\","/")))
+               	
+               	#sound.play()
+               	#sleep(4)
+           
+        #for sound in self.soundsLoaded["sexy"]:
+            
+            #sound.play()
+            
+        #sleep(4)
+        #sys.exit()
+       
     
+    def playSound(self,sound,delay):
+    	#play(sound)
+    	sound.play()
+
     def capture_images_from_file(self,filename):
-        from moviepy.editor import *
+        
         clip = VideoFileClip(self.moviesFolder+filename)
         clip=clip.set_fps(self.framerate)
         clip.resize( (self.captureRes) )
@@ -102,7 +148,7 @@ class aaaay():
         p_status = p.wait()
 
         #This will give you the output of the command being executed
-        print "Command output: " + output
+        #print ("Command output: " + output)
 
     def downloadAndWatch(self,url):
         
@@ -116,7 +162,7 @@ class aaaay():
             print("DOWNLOADING AUDIO, please wait")
             #self.runCommand(youtubeDLCommand2)
             ffmpegCommand="ffmpeg -i movies/"+id+".mp4 -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 128k -movflags +faststart -vf scale=-2:576,format=yuv420p movies/"+id+"_PAL.mp4"
-            print ffmpegCommand
+            
             print("CONVERTING VIDEO, please wait")
             self.runCommand(ffmpegCommand)
         
@@ -186,9 +232,9 @@ class aaaay():
             _ = tf.import_graph_def(graph_def, name='')
             
         #play audio
-        audioFilename=videofilename.split(".")[0]+".mp3"
-        tA = threading.Thread(target=self.playAudio, args = (audioFilename,"mp3",1))
-        tA.start()
+        #audioFilename=videofilename.split(".")[0]+".mp3"
+        #tA = threading.Thread(target=self.playAudio, args = (audioFilename,"mp3",1))
+        #tA.start()
         
         #self.playAudio(videofilename)
         FPS = fps
@@ -232,8 +278,7 @@ class aaaay():
                 l=5
                 step=l
                 stepCount=0
-                print (self.graphs)
-                print ("LELELELE")
+                
                 lastPoint=(w/2,int(0*float(h)))
                 for c,label in enumerate(self.graphs):
                     if self.labels[c] !="normal":
@@ -245,7 +290,7 @@ class aaaay():
                             (((w/2)-stepCount)+l,int(value*float(h)))
                             ,self.colors[c],1)
                             """
-                            currentPoint=(w/2)-stepCount,h-(int(value*float(h))+30)
+                            currentPoint=int((w/2)-stepCount),int(h-(int(value*float(h))+30))
                             if d!=0 and d<len(label)-1:
                                 cv2.line(frame,(currentPoint),(lastPoint),self.colors[c],1)
 
@@ -254,7 +299,7 @@ class aaaay():
                             stepCount+=step
                         stepCount=0
                         #cv2.putText(frame,label+":"+str(round(self.labelsData[label],2))+"%", (90,(i*50)+30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255))
-                        cv2.putText(frame,self.labels[c], ((w/2)+20,h-int(self.graphs[c][-1]*float(h))-27), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colors[c])
+                        cv2.putText(frame,self.labels[c], (int((w/2)+20),h-int(self.graphs[c][-1]*float(h))-27), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colors[c])
                 if self.videomode=="pygame":
                     
                     frame=self.cvimage_to_pygame(frame)
@@ -331,7 +376,10 @@ class aaaay():
 
         print("%s (%.2f%%)" % (predicted_label, max_value * 100))
         if predicted_label != "normal":
-            self.playAudio("sounds/gritoarus.m4a","m4a")
+        	position=random.randint(0,len(self.soundsLoaded[predicted_label])-1)
+        	
+        	self.playSound(self.soundsLoaded[predicted_label][position],0)
+            #self.playAudio("sounds/gritoarus.m4a","m4a")
         self.processing=False
         # Reset the buffer so we're ready for the next one.
         #rawCapture.truncate(0)
@@ -354,7 +402,7 @@ class aaaay():
             # http://www.karoltomala.com/blog/?p=679
             disp_no = os.getenv("DISPLAY")
             if disp_no:
-                print "I'm running under X display = {0}".format(disp_no)
+                print ("I'm running under X display = ".format(disp_no))
 
             # Check which frame buffer drivers are available
             # Start with fbcon since directfb hangs with composite output
@@ -368,7 +416,7 @@ class aaaay():
                     pygame.display.init()
                     self.clock = pygame.time.Clock()
                 except pygame.error:
-                    print 'Driver: {0} failed.'.format(driver)
+                    print ('Driver:  failed.'.format(driver))
                     continue
                 found = True
                 break
@@ -378,7 +426,7 @@ class aaaay():
 
             size = (pygame.display.Info().current_w, pygame.display.Info().current_h)
             self.screenSize=size
-            print "Framebuffer size: %d x %d" % (size[0], size[1])
+            print ("Framebuffer size: %d x %d" % (size[0], size[1]))
             self.screen = pygame.display.set_mode(size, pygame.FULLSCREEN)
             # Clear the screen to start
             #self.screen.fill((0, 0, 0))        
@@ -397,5 +445,6 @@ ay=aaaay()
 #ay.capture_images_from_file("vandamme.mp4")
 #print (ay.predict_on_image("captures/pouritup_18.jpg"))
 #ay.run_classification("movies/pouritup_small.mp4")#"movies/anaconda.mp4")
+#ay.prepareAudios()
 ay.downloadAndWatch("https://www.youtube.com/watch?v=dHULK1M-P08")
 print("FINISHED")
