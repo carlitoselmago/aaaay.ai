@@ -24,6 +24,7 @@ pygame.mixer.init()
 
 class aaaay():
     
+    fullscreen=False
     captureRes=[320,240]
     skip=2 # in seconds
     framerate=10
@@ -36,6 +37,7 @@ class aaaay():
     colors=[[0,255,255],[255,255,0],[255,0,255],[125,125,0]]
     soundBoard="chiquito"
     soundsLoaded={}
+   
 
     
     def __init__(self):
@@ -199,31 +201,27 @@ class aaaay():
 
             return predicted_label,max_value
         
-    def run_classification(self,videofilename):
+    def run_classification(self,input):
         
-        #resize video
-        """
-        clip = VideoFileClip(videofilename)
-        clip=clip.set_fps(self.framerate)
-        clip.resize( (self.captureRes) )
-        clip.write_videofile("test.mp4")
-        """
-        
-        """
+        if isinstance(input, int ):
+            #videocapture
+            mode="livecapture"
+        else:
+            #file mode
 
-        camera = PiCamera()
-        camera.resolution = (320, 240)
-        camera.framerate = 2
-        rawCapture = PiRGBArray(camera, size=(320, 240))
+            mode="file"
+            #videofilename=input
 
-        # Warmup...
-        time.sleep(2)
-        """
-        cap = cv2.VideoCapture(videofilename)
+      
+        cap = cv2.VideoCapture(input)
         #cap = cv2.VideoCapture("test.mp4")
         
-        total_frames = cap.get(7)
-        fps = cap.get(5)
+        if mode=="file":
+        	total_frames = cap.get(7)
+        	fps = cap.get(5)
+
+        	#play music
+        	
 
         # Unpersists graph from file
         with tf.gfile.FastGFile("train/retrained_graph.pb", 'rb') as f:
@@ -231,20 +229,30 @@ class aaaay():
             graph_def.ParseFromString(f.read())
             _ = tf.import_graph_def(graph_def, name='')
             
-        #play audio
-        #audioFilename=videofilename.split(".")[0]+".mp3"
-        #tA = threading.Thread(target=self.playAudio, args = (audioFilename,"mp3",1))
-        #tA.start()
         
         #self.playAudio(videofilename)
-        FPS = fps
+        if mode=="file":
+        	FPS = fps
 
         with tf.Session() as sess:
             softmax_tensor = sess.graph.get_tensor_by_name('final_result:0')
             if self.videomode=="gtk":
-                cv2.namedWindow(self.windowName, cv2.WND_PROP_FULLSCREEN)
-                cv2.setWindowProperty(self.windowName,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)       
+                if self.fullscreen:
+                    cv2.namedWindow(self.windowName, cv2.WND_PROP_FULLSCREEN)
+                    cv2.setWindowProperty(self.windowName,cv2.WND_PROP_FULLSCREEN,cv2.WINDOW_FULLSCREEN)       
            
+
+            #start analyse thread/process
+            ret, frame = cap.read()
+            self.frame=frame
+            t = threading.Thread(target=self.analysiseFrame, args = (sess,softmax_tensor))
+            t.start()
+            
+            if mode=="file":
+                audiosource=input.replace("_PAL","").replace(".mp4",".mp3")
+                pygame.mixer.music.load(audiosource)
+                pygame.mixer.music.play()
+
             running=True
             while running:  # note that we don't have to use frame number here, we could read from a live written file.
                 start_time = time.time()
@@ -256,14 +264,14 @@ class aaaay():
                 #sys.exit()
                 # Get the numpy version of the image.
                 
-                
-                
+                self.frame=frame
+                """
                 if not self.processing:
                     t = threading.Thread(target=self.analysiseFrame, args = (sess,softmax_tensor,frame))
                     #t.daemon = True
                     t.start()
                     pass
-                   
+                """
                
                 #END ACTION 
                 #cap.set(1,currentTimeFrame) #frames to skip
@@ -318,7 +326,7 @@ class aaaay():
                 #cv2.waitKey(int(fps*1000)) # time to wait between frames, in mSec
                 #ret, frame = cap.read() # read next frame, get next return code
                 if self.videomode=="gtk":
-                    key = cv2.waitKey(50)
+                    key = cv2.waitKey(30)
                     if  key == 32:
                         running = False
                         break  # esc to quit
@@ -337,13 +345,18 @@ class aaaay():
                                 pygame.display.set_mode(self.screenSize)
                             else:
                                 pygame.display.set_mode(self.screenSize, pygame.FULLSCREEN)
+                """
+                if mode=="file":
 
                     totalTime=(time.time() - start_time)
                     #print (totalTime)
                     #totalTime=0.1
                     currentTimeFrame=cap.get(1)+(totalTime*fps)
-                    #cap.set(1,currentTimeFrame) #frames to skip
+                    #print(currentTimeFrame)
+                    cap.set(1,currentTimeFrame) #frames to skip
 
+                    #cap.set(2,200)
+				"""
                 
 
             if self.videomode=="gtk":
@@ -357,32 +370,34 @@ class aaaay():
         return pygame.image.frombuffer(image.tostring(), image.shape[1::-1],
                                        "RGB")
                                        
-    def analysiseFrame(self,sess,softmax_tensor,decoded_image):
-        self.processing=True
-        # Make the prediction. Big thanks to this SO answer:
-        # http://stackoverflow.com/questions/34484148/feeding-image-data-in-tensorflow-for-transfer-learning
-        predictions = sess.run(softmax_tensor, {'DecodeJpeg:0': decoded_image})
-        self.labelsData=dict(zip(self.labels, predictions[0]))
-        for i,pred in enumerate(predictions[0]):
-            print ("pred",pred)
-            self.graphs[i].append(pred)
-        prediction = predictions[0]
+    def analysiseFrame(self,sess,softmax_tensor):
 
-        # Get the highest confidence category.
-        prediction = prediction.tolist()
-        max_value = max(prediction)
-        max_index = prediction.index(max_value)
-        predicted_label = self.labels[max_index]
+    	while True:
+	        decoded_image=self.frame
+	        #self.processing=True
+	        # Make the prediction. Big thanks to this SO answer:
+	        # http://stackoverflow.com/questions/34484148/feeding-image-data-in-tensorflow-for-transfer-learning
+	        predictions = sess.run(softmax_tensor, {'DecodeJpeg:0': decoded_image})
+	        self.labelsData=dict(zip(self.labels, predictions[0]))
+	        for i,pred in enumerate(predictions[0]):
+	            self.graphs[i].append(pred)
+	        prediction = predictions[0]
 
-        print("%s (%.2f%%)" % (predicted_label, max_value * 100))
-        if predicted_label != "normal":
-        	position=random.randint(0,len(self.soundsLoaded[predicted_label])-1)
-        	
-        	self.playSound(self.soundsLoaded[predicted_label][position],0)
-            #self.playAudio("sounds/gritoarus.m4a","m4a")
-        self.processing=False
-        # Reset the buffer so we're ready for the next one.
-        #rawCapture.truncate(0)
+	        # Get the highest confidence category.
+	        prediction = prediction.tolist()
+	        max_value = max(prediction)
+	        max_index = prediction.index(max_value)
+	        predicted_label = self.labels[max_index]
+
+	        print("%s (%.2f%%)" % (predicted_label, max_value * 100))
+	        if predicted_label != "normal":
+	        	position=random.randint(0,len(self.soundsLoaded[predicted_label])-1)
+	        	
+	        	self.playSound(self.soundsLoaded[predicted_label][position],0)
+	           
+	        #self.processing=False
+	     
+	        sleep(0.1)
         
     def playAudio(self,filename,format="webm",delay=0):
         sleep(delay)
@@ -446,5 +461,8 @@ ay=aaaay()
 #print (ay.predict_on_image("captures/pouritup_18.jpg"))
 #ay.run_classification("movies/pouritup_small.mp4")#"movies/anaconda.mp4")
 #ay.prepareAudios()
-ay.downloadAndWatch("https://www.youtube.com/watch?v=dHULK1M-P08")
+#ay.downloadAndWatch("https://www.youtube.com/watch?v=d2smz_1L2_0")
+#ay.run_classification("movies/dHULK1M-P08_PAL.mp4")
+ay.downloadAndWatch("https://www.youtube.com/watch?v=JgffRW1fKDk")
+#ay.run_classification(0)#live mode
 print("FINISHED")
