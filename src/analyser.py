@@ -5,6 +5,8 @@ import _pickle as cPickle
 from _pickle import dumps, loads
 import json
 
+
+
 """
 app = Flask(__name__)
 
@@ -122,4 +124,4 @@ def analysiseFrame():
 		
 
 if __name__ == '__main__':
-	app.run(host="127.0.0.1", port=23948)
+	app.run(host="127.0.0.1", port=23948,threaded=True)

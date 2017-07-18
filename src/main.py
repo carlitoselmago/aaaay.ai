@@ -16,27 +16,27 @@ import glob
 import grequests
 from _pickle import dumps, loads
 import json
-
+import random
 
 pygame.mixer.init()
 
 class aaaay():
 	
 	fullscreen=False
-	captureRes=[320,240]
-	skip=2 # in seconds
-	framerate=10
-	moviesFolder="movies/"
-	capturesFolder="captures/"
+	overlayMode="words"#options stats, words
+	soundBoard="chiquito"
+	
+	
 	windowName="aaaay.ai"
+	
 	processing=False
 	videomode="gtk" #options: gtk,pygame
 	graphs=[] 
 	colors=[[0,255,255],[255,255,0],[255,0,255],[125,125,0]]
-	soundBoard="chiquito"
 	soundsLoaded={}
-   
-
+	soundNamesLoaded={}
+	animationWords=[]
+	skip=2 # in seconds
 	
 	def __init__(self):
 		self.labels=self.get_labels()
@@ -74,31 +74,20 @@ class aaaay():
 			for dirs in subdirs:
 				#print (dirs)
 				self.soundsLoaded[dirs]=[]
+				self.soundNamesLoaded[dirs]=[]
 			for name in files:
 				label= path.split("\\")[-1]
 				#self.soundsLoaded[label].append(AudioSegment.from_ogg(os.path.abspath(os.path.join(path, name)).replace("\\","/")))
 				#sound=pygame.mixer.Sound(os.path.abspath(os.path.join(path, name)).replace("\\","/"))
 				self.soundsLoaded[label].append(pygame.mixer.Sound(os.path.abspath(os.path.join(path, name)).replace("\\","/")))
+				self.soundNamesLoaded[label].append(name.split(".")[0])
 				
 	
 	def playSound(self,sound,delay):
 		#play(sound)
 		sound.play()
 
-	def capture_images_from_file(self,filename):
-		
-		clip = VideoFileClip(self.moviesFolder+filename)
-		clip=clip.set_fps(self.framerate)
-		clip.resize( (self.captureRes) )
-		print ("clip duration",clip.duration/60," minutes ::::")
-		
-		count=0
-		for t in range(0,int(clip.duration)):
-			if count==2:
-				print (self.capturesFolder+filename.split(".")[0]+"_"+str(t)+".jpg",t)
-				clip.save_frame(self.capturesFolder+filename.split(".")[0]+"_"+str(t)+".jpg", t=t)
-				count=0
-			count+=1
+	
 		
 	def capture_images_from_camera(self,save_folder):
 		"""Stream images off the camera and save them."""
@@ -190,27 +179,42 @@ class aaaay():
 		grequests.map(r)
 		return
 		
-	def manageAnalResponse(self,response, **kwargs):
+
+	def generateanimationWords(self,label,amount):
 		
+		if label !="normal":
+			for word in range(int(amount*10.0)):
+				wordAnim={"text":random.choice(self.soundNamesLoaded[label]),"speed":random.randint(1,5),"top":random.randint(10,self.h),"left":random.randint(-20,-30)}
+				self.animationWords.append(wordAnim)
+		
+
+	def manageAnalResponse(self,response, **kwargs):
+
 		prediction=json.loads(response.text)
 		
-		for i,pred in enumerate(prediction):
-			self.graphs[i].append(pred)
+		if self.overlayMode=="stats":
+			for i,pred in enumerate(prediction):
+				self.graphs[i].append(pred)
 		
 		max_value = max(prediction)
 		max_index = prediction.index(max_value)
 		predicted_label = self.labels[max_index]
 		
+		if self.overlayMode=="words":
+			self.generateanimationWords(predicted_label, max_value)
+
 		#print("%s (%.2f%%)" % (predicted_label, max_value * 100))
 		if predicted_label != "normal":
-			pass
+
 			position=random.randint(0,len(self.soundsLoaded[predicted_label])-1)
 			self.playSound(self.soundsLoaded[predicted_label][position],0)
 		
 		self.Analbusy=False
+		sleep(0.1)
 		return predicted_label 
 
 	def run_classification(self,input):
+		
 		cap = cv2.VideoCapture(input)
 		
 		self.anal = subprocess.Popen("python3 analyser.py")
@@ -226,8 +230,8 @@ class aaaay():
 			#file mode
 			mode="file"
 
-		w=int(cap.get(3))
-		h=int(cap.get(4))
+		self.w=int(cap.get(3))
+		self.h=int(cap.get(4))
 		
 		if mode=="file":
 			total_frames = cap.get(7)
@@ -249,36 +253,53 @@ class aaaay():
 			pygame.mixer.music.play()
 
 		running=True
+		analBusyTime=0
 		while running: 
 			start_time = time.time()
 			ret, frame = cap.read()
 	
-			#print(count.value)
+			analBusyTime+=1
 			if not self.Analbusy:
+				#self.callAnalyser(frame)
 				t = threading.Thread(target=self.callAnalyser, args = (frame,))
 				t.start()
+			else:
+				#fill graph to add speed
+				if self.overlayMode=="stats":
+					for i,g in enumerate(self.graphs):
+						self.graphs[i].append(self.graphs[i][-1])
+
 			#graphs
-			#w=capSize[0]#self.screenSize.width
-			#h=capSize[1]#(self.screenSize.height)-300
 			l=5
 			step=l
 			stepCount=0
 			
-			lastPoint=(w/2,int(0*float(h)))
-			for c,label in enumerate(self.graphs):
-				if self.labels[c] !="normal":
-					for d,value in enumerate(reversed(label)):
+			if self.overlayMode=="stats":
+				lastPoint=(w/2,int(0*float(self.h)))
+				for c,label in enumerate(self.graphs):
+					if self.labels[c] !="normal":
+						for d,value in enumerate(reversed(label)):
 
-						currentPoint=int((w/2)-stepCount),int(h-(int(value*float(h))+30))
-						if d!=0 and d<len(label)-1:
-							cv2.line(frame,(currentPoint),(lastPoint),self.colors[c],1)
+							currentPoint=int((self.w/2)-stepCount),int(self.h-(int(value*float(self.h))+30))
+							if d!=0 and d<len(label)-1:
+								cv2.line(frame,(currentPoint),(lastPoint),self.colors[c],1)
 
-						lastPoint=currentPoint
+							lastPoint=currentPoint
 
-						stepCount+=step
-					stepCount=0
-					#cv2.putText(frame,label+":"+str(round(self.labelsData[label],2))+"%", (90,(i*50)+30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255))
-					cv2.putText(frame,self.labels[c], (int((w/2)+20),h-int(self.graphs[c][-1]*float(h))-27), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colors[c])
+							stepCount+=step
+						stepCount=0
+						#cv2.putText(frame,label+":"+str(round(self.labelsData[label],2))+"%", (90,(i*50)+30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255))
+						cv2.putText(frame,self.labels[c], (int((self.w/2)+20),self.h-int(self.graphs[c][-1]*float(self.h))-27), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colors[c],2)
+			
+			if self.overlayMode=="words":
+				for i,word in enumerate(self.animationWords):
+					
+					cv2.putText(frame,word["text"], (int(word["left"]),int(word["top"])), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,255,255))
+					self.animationWords[i]["left"]+=word["speed"]
+					if self.animationWords[i]["left"]>self.w:
+						del  self.animationWords[i]
+
+
 			if self.videomode=="pygame":
 				
 				frame=self.cvimage_to_pygame(frame)
@@ -377,7 +398,6 @@ class aaaay():
 if __name__ == '__main__':
 			
 	ay=aaaay()
-	#ay.capture_images_from_file("pouritup.mp4")
 	#ay.capture_images_from_file("vandamme.mp4")
 	#print (ay.predict_on_image("captures/pouritup_18.jpg"))
 	#ay.run_classification("movies/pouritup_small.mp4")#"movies/anaconda.mp4")
