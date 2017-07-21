@@ -1,1 +1,1 @@
-python3 tensorflow/examples/image_retraining/retrain.py  --bottleneck_dir=train/bottlenecks  --model_dir=train/inception/  --output_graph=train/retrained_graph.pb  --output_labels=train/retrained_labels.txt  --image_dir captures/
+python3 tensorflowX/examples/image_retraining/retrain.py  --bottleneck_dir=train/bottlenecks  --model_dir=train/inception/  --output_graph=train/retrained_graph.pb  --output_labels=train/retrained_labels.txt  --image_dir captures/

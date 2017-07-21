@@ -34,9 +34,10 @@ else:
 """
 
 for root, dirs, files in os.walk(moviesFolder):
-    for file in files:
-    	print("processing "+file)
-    	try:
-    		capture_images_from_file(file)
-    	except:
-    		print("Not a valid video file")
+	for file in files:
+		print("processing "+file)
+		if not "procesed" in file:
+			try:
+				capture_images_from_file(file)
+			except:
+				print("Not a valid video file")

@@ -22,7 +22,7 @@ pygame.mixer.init()
 
 class aaaay():
 	
-	fullscreen=False
+	fullscreen=True
 	overlayMode="words"#options stats, words
 	soundBoard="chiquito"
 	
@@ -64,7 +64,8 @@ class aaaay():
 		self.anal=subprocess.Popen("python3 analyser.py")
 
 	def stopAnalyser(self):
-		self.anal.kill()
+		pass
+		#self.anal.kill()
 		#self.analx.terminate()
 
 	   
@@ -184,7 +185,7 @@ class aaaay():
 		
 		if label !="normal":
 			for word in range(int(amount*10.0)):
-				wordAnim={"text":random.choice(self.soundNamesLoaded[label]),"speed":random.randint(1,5),"top":random.randint(10,self.h),"left":random.randint(-20,-30)}
+				wordAnim={"text":random.choice(self.soundNamesLoaded[label]),"speed":random.randint(1,5),"top":random.randint(10,self.h),"left":-random.randint(30,50)}
 				self.animationWords.append(wordAnim)
 		
 
@@ -209,15 +210,16 @@ class aaaay():
 			position=random.randint(0,len(self.soundsLoaded[predicted_label])-1)
 			self.playSound(self.soundsLoaded[predicted_label][position],0)
 		
+		
+		#sleep(0.3)
 		self.Analbusy=False
-		sleep(0.1)
 		return predicted_label 
 
 	def run_classification(self,input):
 		
 		cap = cv2.VideoCapture(input)
 		
-		self.anal = subprocess.Popen("python3 analyser.py")
+		#self.anal = subprocess.Popen("python3 analyser.py")
 		print("wait till analyser is ready")
 		sleep(10)
 		
@@ -254,13 +256,18 @@ class aaaay():
 
 		running=True
 		analBusyTime=0
+
+		
+
+
 		while running: 
 			start_time = time.time()
 			ret, frame = cap.read()
 	
 			analBusyTime+=1
 			if not self.Analbusy:
-				#self.callAnalyser(frame)
+				
+				#print("call analyzer")
 				t = threading.Thread(target=self.callAnalyser, args = (frame,))
 				t.start()
 			else:
@@ -275,7 +282,7 @@ class aaaay():
 			stepCount=0
 			
 			if self.overlayMode=="stats":
-				lastPoint=(w/2,int(0*float(self.h)))
+				lastPoint=(self.w/2,int(0*float(self.h)))
 				for c,label in enumerate(self.graphs):
 					if self.labels[c] !="normal":
 						for d,value in enumerate(reversed(label)):
@@ -294,7 +301,7 @@ class aaaay():
 			if self.overlayMode=="words":
 				for i,word in enumerate(self.animationWords):
 					
-					cv2.putText(frame,word["text"], (int(word["left"]),int(word["top"])), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,255,255))
+					cv2.putText(frame,word["text"], (int(word["left"]),int(word["top"])), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255,255,255))
 					self.animationWords[i]["left"]+=word["speed"]
 					if self.animationWords[i]["left"]>self.w:
 						del  self.animationWords[i]
@@ -314,7 +321,7 @@ class aaaay():
 			
 			if self.videomode=="gtk":
 				key = cv2.waitKey(30)
-				if  key == 32:
+				if  key == 27:
 					running = False
 					break  # esc to quit
 					
