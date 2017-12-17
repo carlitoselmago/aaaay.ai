@@ -1,3 +1,4 @@
+# use with python 3
 import time
 import cv2
 import numpy as np
@@ -14,6 +15,7 @@ from multiprocessing import Array, Value
 import subprocess
 import glob
 import grequests
+import requests
 from _pickle import dumps, loads
 import json
 import random
@@ -24,26 +26,33 @@ class aaaay():
 	
 	fullscreen=True
 	overlayMode="words"#options stats, words
-	soundBoard="chiquito"
-	
-	
+	soundBoard="all"
+	boringLimit=1000
+	screenSize= (1280, 720)
+	minScandalous=0.6 #scale from 0.0 to 1.0
 	windowName="aaaay.ai"
 	
 	processing=False
-	videomode="gtk" #options: gtk,pygame
+	videomode="pygame" #options: gtk,pygame
 	graphs=[] 
 	colors=[[0,255,255],[255,255,0],[255,0,255],[125,125,0]]
 	soundsLoaded={}
 	soundNamesLoaded={}
+	
 	animationWords=[]
-	skip=2 # in seconds
+	skip=1 # in seconds
+	analyzingCount=0
+	analyzing=False
+	responseTime=0
+	firstRequestAnswer=False
 	
 	def __init__(self):
 		self.labels=self.get_labels()
 		
-		#self.analx = multiprocessing.Process(target=self.runAnalyser,args = ("analyser"))
+		#self.analx = multiprocessing.Process(target=self.runAnalyser)
 		#self.analx.start()
 		self.prepareAudios()
+		self.prepareWords()
 		print ("init aaaay class")
 		
 		self.labelsData={}
@@ -64,9 +73,10 @@ class aaaay():
 		self.anal=subprocess.Popen("python3 analyser.py")
 
 	def stopAnalyser(self):
-		pass
-		#self.anal.kill()
+		#self.analx.anal.kill()
 		#self.analx.terminate()
+		self.anal.kill()
+		self.analx.terminate()
 
 	   
 	def prepareAudios(self):
@@ -75,14 +85,24 @@ class aaaay():
 			for dirs in subdirs:
 				#print (dirs)
 				self.soundsLoaded[dirs]=[]
-				self.soundNamesLoaded[dirs]=[]
+				#self.soundNamesLoaded[dirs]=[]
 			for name in files:
 				label= path.split("\\")[-1]
 				#self.soundsLoaded[label].append(AudioSegment.from_ogg(os.path.abspath(os.path.join(path, name)).replace("\\","/")))
 				#sound=pygame.mixer.Sound(os.path.abspath(os.path.join(path, name)).replace("\\","/"))
 				self.soundsLoaded[label].append(pygame.mixer.Sound(os.path.abspath(os.path.join(path, name)).replace("\\","/")))
-				self.soundNamesLoaded[label].append(name.split(".")[0])
+				#self.soundNamesLoaded[label].append(name.split(".")[0])
 				
+	def prepareWords(self):
+		for path, subdirs, files in os.walk('words'+os.sep+"analysis"):
+			for name in files:
+				label= name.split(".")[0]
+				self.soundNamesLoaded[label]=[]
+				words=json.load(open(os.path.abspath(os.path.join(path, name)).replace("\\","/"),encoding='utf-8'))
+				for word in words:
+					self.soundNamesLoaded[label].append(word)
+
+		self.soundNamesLoaded["boring"]=json.load((open("words/boring.json",encoding='utf-8')))
 	
 	def playSound(self,sound,delay):
 		#play(sound)
@@ -176,21 +196,35 @@ class aaaay():
 
 	def callAnalyser(self,frame):
 		self.Analbusy=True
-		r = ([grequests.post("http://127.0.0.1:23948/analysiseFrame", data=dumps(frame),headers={'Content-Type': 'application/octet-stream'},hooks={'response':self.manageAnalResponse})])
-		grequests.map(r)
+		#r = ([grequests.post("http://127.0.0.1:23948/analysiseFrame", data=dumps(frame),headers={'Content-Type': 'application/octet-stream'},timeout=8,hooks={'response':self.manageAnalResponse})])
+		#grequests.map(r, exception_handler=self.errorRequests)
+		#grequests.map(r)
+		
+		r=requests.post("http://127.0.0.1:23948/analysiseFrame",data=dumps(frame))
+		self.manageAnalResponse(r)
 		return
 		
+	def errorRequests(self,a,b):
+		
+		if "Read timed out" in str(b):
+			print(a,b)
+			print (type(b))
+			
+			print ("excpetion handler call with grequests")
+			self.Analbusy=False
+			self.responseTime=0
+		return
 
 	def generateanimationWords(self,label,amount):
 		
 		if label !="normal":
 			for word in range(int(amount*10.0)):
-				wordAnim={"text":random.choice(self.soundNamesLoaded[label]),"speed":random.randint(1,5),"top":random.randint(10,self.h),"left":-random.randint(30,50)}
+				wordAnim={"text":random.choice(self.soundNamesLoaded[label]),"speed":random.randint(4,8),"top":random.randint(10,self.h),"left":-random.randint(50,120)}
 				self.animationWords.append(wordAnim)
 		
 
-	def manageAnalResponse(self,response, **kwargs):
-
+	def manageAnalResponse(self,response):
+		
 		prediction=json.loads(response.text)
 		
 		if self.overlayMode=="stats":
@@ -200,20 +234,31 @@ class aaaay():
 		max_value = max(prediction)
 		max_index = prediction.index(max_value)
 		predicted_label = self.labels[max_index]
+
+		#print ("max_value",max_value)
 		
-		if self.overlayMode=="words":
+		if self.overlayMode=="words" and max_value>self.minScandalous:
 			self.generateanimationWords(predicted_label, max_value)
 
 		#print("%s (%.2f%%)" % (predicted_label, max_value * 100))
-		if predicted_label != "normal":
-
+		if predicted_label != "normal" and max_value>self.minScandalous:
+			self.analyzingCount=0
 			position=random.randint(0,len(self.soundsLoaded[predicted_label])-1)
 			self.playSound(self.soundsLoaded[predicted_label][position],0)
 		
 		
 		#sleep(0.3)
+		self.firstRequestAnswer=True
 		self.Analbusy=False
+		self.responseTime=0
 		return predicted_label 
+
+	def text_to_screen(self,text, size = 50,color = (255, 255, 255), font_type = 'fonts/courierbold.ttf'):
+		text = str(text)
+		#font = pygame.font.Font(font_type, size)
+		font=self.font
+		text = font.render(text, True, color)
+		return text
 
 	def run_classification(self,input):
 		
@@ -255,31 +300,47 @@ class aaaay():
 			pygame.mixer.music.play()
 
 		running=True
-		analBusyTime=0
-
 		
 
 
 		while running: 
-			start_time = time.time()
-			ret, frame = cap.read()
-	
-			analBusyTime+=1
-			if not self.Analbusy:
+			
+			#print (self.responseTime)
+			ret, frameCV = cap.read()
+			
+			if self.videomode=="pygame":
+				#self.screen.fill((0,0,0))
+				frame=self.cvimage_to_pygame(frameCV)
+				frame = pygame.transform.scale(frame, self.screenSize)
+				self.screen.blit(frame,(0,0))
+			
+			if not self.Analbusy and self.analyzing:
 				
 				#print("call analyzer")
-				t = threading.Thread(target=self.callAnalyser, args = (frame,))
+				t = threading.Thread(target=self.callAnalyser, args = (frameCV,))
 				t.start()
+				#try:
+					#self.callAnalyser(frameCV)
+					
+				#except:
+				#	print("couldn't start analyser thread")
 			else:
+				if self.analyzing:
+					self.responseTime+=1
 				#fill graph to add speed
 				if self.overlayMode=="stats":
 					for i,g in enumerate(self.graphs):
 						self.graphs[i].append(self.graphs[i][-1])
 
+			
+
+
 			#graphs
 			l=5
 			step=l
 			stepCount=0
+
+			
 			
 			if self.overlayMode=="stats":
 				lastPoint=(self.w/2,int(0*float(self.h)))
@@ -295,26 +356,61 @@ class aaaay():
 
 							stepCount+=step
 						stepCount=0
+
+						#frame=self.cvimage_to_pygame(frame)
 						#cv2.putText(frame,label+":"+str(round(self.labelsData[label],2))+"%", (90,(i*50)+30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255))
 						cv2.putText(frame,self.labels[c], (int((self.w/2)+20),self.h-int(self.graphs[c][-1]*float(self.h))-27), cv2.FONT_HERSHEY_SIMPLEX, 0.5, self.colors[c],2)
+						
 			
+			
+				
+
 			if self.overlayMode=="words":
 				for i,word in enumerate(self.animationWords):
-					
-					cv2.putText(frame,word["text"], (int(word["left"]),int(word["top"])), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255,255,255))
+					x=int(word["left"])
+					y=int(word["top"])
+					text=self.text_to_screen(word["text"], size = 20)
+					self.screen.blit(text,(x,y))
+					#cv2.putText(frame,word["text"], (int(word["left"]),int(word["top"])), cv2.FONT_HERSHEY_COMPLEX, 0.8, (255,255,255))
 					self.animationWords[i]["left"]+=word["speed"]
-					if self.animationWords[i]["left"]>self.w:
-						del  self.animationWords[i]
+					if self.animationWords[i]["left"]>self.screenSize[0]:
+						del self.animationWords[i]
 
+
+			if self.analyzing:
+				self.analyzingCount+=1
+				if self.analyzingCount>self.boringLimit:
+					#BORINGGG...
+					self.generateanimationWords("boring", 0.3)
+					self.analyzingCount=0
 
 			if self.videomode=="pygame":
-				
-				frame=self.cvimage_to_pygame(frame)
-				frame = pygame.transform.scale(frame, self.screenSize)
-				self.screen.blit(frame,(0,0))
+				#FPS=25
+				#frame=self.cvimage_to_pygame(frame)
+				#frame = pygame.transform.scale(frame, self.screenSize)
+				#self.screen.blit(frame,(0,0))
 				#self.screen.fill(frame)
+				
 				pygame.display.update()
-				self.clock.tick(FPS)
+				#self.clock.tick(FPS)
+
+			if self.responseTime>200 and self.firstRequestAnswer:
+				"""
+				self.analx.exit.set()
+				time.sleep(3)
+				self.analx = multiprocessing.Process(target=self.runAnalyser)
+				self.analx.start()
+				"""
+				#server timeout, force request
+				"""
+				self.Analbusy=False
+				self.responseTime=0
+				print ("REST RESPONSE TIME, FORCE REQUEST!")
+				time.sleep(1)
+				"""
+				print ("TOO LONG RESPONSE TIME, RESET ANALYZER!")
+				self.Analbusy=False
+				self.responseTime=0
 				
 			if self.videomode=="gtk":
 				cv2.imshow(self.windowName, frame)
@@ -331,16 +427,30 @@ class aaaay():
 					if event.type == pygame.QUIT:
 						running = False  # Be interpreter friendly
 					elif event.type == pygame.KEYDOWN:
+						
 						if event.key == pygame.K_ESCAPE:
 							running = False
+
+						if event.key == pygame.K_p:
+							if self.analyzing:
+								self.analyzing=False
+							else:
+								self.analyzing=True
+							print("analyzing:",self.analyzing)
+
+						if event.key == pygame.K_k:
+							self.Analbusy=False
+							self.responseTime=0
 							
 					if (event.type is pygame.KEYDOWN and event.key == pygame.K_f):
 						if self.screen.get_flags() & pygame.FULLSCREEN:
 							pygame.display.set_mode(self.screenSize)
 						else:
 							pygame.display.set_mode(self.screenSize, pygame.FULLSCREEN)
+		
 				
-		self.stopAnalyser()
+		#self.stopAnalyser()
+		
 		if self.videomode=="gtk":
 			cv2.destroyAllWindows()
 		if self.videomode=="pygame":
@@ -349,8 +459,9 @@ class aaaay():
 		   
 	def cvimage_to_pygame(self,image):
 		"""Convert cvimage into a pygame image"""
-		return pygame.image.frombuffer(image.tostring(), image.shape[1::-1],
-									   "RGB")
+		#return cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
+		image=cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+		return pygame.image.frombuffer(image.tostring(), image.shape[1::-1],"RGB")
 				
 	def playAudio(self,filename,format="webm",delay=0):
 		sleep(delay)
@@ -360,10 +471,12 @@ class aaaay():
 			
 	def initPygameScreen(self,mode=0):
 		if mode==1:
+			pygame.init()
 			pygame.display.init()
-			self.clock = pygame.time.Clock()
-			self.screenSize= (720, 576)
+			#self.clock = pygame.time.Clock()
+			
 			self.screen = pygame.display.set_mode( ( self.screenSize ) )#PAL
+			self.font= pygame.font.SysFont("monospace", 40)
 		else:
 			"Ininitializes a new pygame screen using the framebuffer"
 			# Based on "Python GUI in Linux frame buffer"
@@ -413,5 +526,5 @@ if __name__ == '__main__':
 	#ay.run_classification("movies/dHULK1M-P08_PAL.mp4")
 	#ay.downloadAndWatch("https://www.youtube.com/watch?v=JgffRW1fKDk")
 	#ay.downloadAndWatch("https://www.youtube.com/watch?v=ZXIe6pouJTc")
-	ay.run_classification(0)#live mode
+	ay.run_classification(1)#live mode
 	print("FINISHED")

@@ -4,12 +4,16 @@ import numpy as np
 import _pickle as cPickle
 from _pickle import dumps, loads
 import json
+import os
+import threading
 
 class analyser():
 
+	response=False
+
 	def __init__(self):
 		labels=self.get_labels()
-		with tf.gfile.FastGFile("train/retrained_graph.pb", 'rb') as f:
+		with tf.gfile.FastGFile(os.path.dirname(os.path.realpath(__file__))+"/train/retrained_graph.pb", 'rb') as f:
 			graph_def = tf.GraphDef()
 			graph_def.ParseFromString(f.read())
 			_ = tf.import_graph_def(graph_def, name='')
@@ -19,9 +23,21 @@ class analyser():
 
 	def get_labels(self):
 	
-		with open('train/retrained_labels.txt', 'r') as fin:
+		with open(os.path.dirname(os.path.realpath(__file__))+'/train/retrained_labels.txt', 'r') as fin:
 			labels = [line.rstrip('\n') for line in fin]
 			return labels
+
+	def runAnalyser(self,inputdata):
+		
+		# Unpersists graph from file
+		     
+		decoded_image=loads(inputdata)
+		predictions = anal.sess.run(anal.softmax_tensor, {'DecodeJpeg:0': decoded_image})
+		#self.labelsData=dict(zip(self.labels, predictions[0]))
+		print (json.dumps(predictions[0].tolist()))
+		self.response=json.dumps(predictions[0].tolist())
+		return 
+
 
 app = Flask(__name__)
 
@@ -42,16 +58,32 @@ def hello():
 
 @app.route("/analysiseFrame",methods=["POST"])
 def analysiseFrame():
+		"""
+		t = threading.Thread(target=anal.runAnalyser, args = (request.get_data(),))
+		t.start()
+		counter=0
+		while not anal.response:
+			#print("wait",counter)
+			counter+=1
 
-		input=request.get_data()
-		# Unpersists graph from file
-		     
-		decoded_image=loads(input)
+			if counter>119709422:
+				#cancel thread
+				print ("TIME OUT CANCEL THREEAD!")
+				anal.response="[0,0,1]"
+				
+		print ("counter",counter)
+		returnvalue=anal.response
+		print ("returnvalue",returnvalue)
+		anal.response=False
+		return returnvalue
+		"""
+		decoded_image=loads(request.get_data())
 		predictions = anal.sess.run(anal.softmax_tensor, {'DecodeJpeg:0': decoded_image})
 		#self.labelsData=dict(zip(self.labels, predictions[0]))
+		print (json.dumps(predictions[0].tolist()))
 		return json.dumps(predictions[0].tolist())
 
-		
+
 
 if __name__ == '__main__':
 	"""
